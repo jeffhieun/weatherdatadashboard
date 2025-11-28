@@ -1,0 +1,4 @@
+2025/11/22 12:19:15 Config: port=8081 cacheTTL=5m0s geocode=https://geocoding-api.open-meteo.com weather=https://api.open-meteo.com
+Server running at http://localhost:8081
+2025/11/22 12:22:20 Shutting down server...
+2025/11/22 12:22:20 Server exiting
