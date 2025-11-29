@@ -1,76 +1,132 @@
+go build -o bin/weatherd
+go test ./...
 # Weather Data Dashboard
 
-This repository contains the Weather Data Dashboard project. It is split into two top-level folders:
+A full-stack project for weather data visualization and city search, featuring a Go backend (with Swagger/OpenAPI docs) and a React frontend.
 
-- `be/` — backend (Go)
-  - Contains the API server, tests, Dockerfile, and a `be/README.md` with build/run/test instructions.
-- `fe/` — frontend (React)
-  - (Not created yet) Intended to hold the React UI (e.g., Vite + React + TypeScript).
+---
 
-Quick links
-- Backend docs: `be/README.md`
+## Project Structure
 
-How to work on the project
-- Backend
-  - cd into `be/` and follow the instructions in `be/README.md` to build, run, test, and run Docker.
+- **be/** — Go backend API server  
+  - RESTful endpoints for weather, city search, and more  
+  - In-memory caching  
+  - Swagger UI at `/swagger/index.html`  
+  - Prometheus metrics at `/metrics`
+- **fe/** — React frontend  
+  - Vite + React + TypeScript (recommended setup)
 
-- Frontend
-  - Create a `fe/` directory (I recommend using Vite + React + TypeScript). Example starter:
-    - `npm create vite@latest fe -- --template react-ts`
+---
 
-Notes
-- The repository CI is configured to build and test the backend in `be/` (see `.github/workflows/ci.yml`).
-- The backend exposes Prometheus metrics on `/metrics` and the main API at `/api/weather/current`.
+## Backend Endpoints
 
-If you want, I can scaffold the frontend (`fe/`) next using Vite + React + TypeScript and wire a minimal UI that calls the backend.
-# Weather Data Dashboard — Go backend
+- `GET /api/weather/current?city={city}` — Get current weather for a city (live fetch, caches result)
+- `GET /api/weather/details?city={city}` — (Alias, same as above)
+- `GET /api/weather/result?city={city}` — Get cached weather result (no live fetch)
+- `GET /api/weather/results` — List all cached weather records
+- `GET /api/cities/search?query={name}` — City auto-suggest (min 2 chars)
+- `GET /api/flood/risk` — (If implemented) Flood risk endpoint
+- `GET /api/flood/results` — (If implemented) List flood risk results
+- `GET /swagger/index.html` — Swagger UI (API docs)
+- `GET /metrics` — Prometheus metrics
 
-This repository contains a simple Go backend that exposes a single endpoint to fetch the current temperature for a city using the Open-Meteo APIs. It includes an in-memory cache to avoid repeated external requests.
+---
 
-Endpoints
-- GET /api/weather/current?city={city-name}
+## Backend: Quickstart
 
-Responses (JSON)
-- city: queried city
-- temperature: current temperature (float)
-- cached: boolean (true if served from cache)
-- fetched_at: timestamp when the value was fetched
-
-Build & run (macOS / zsh)
-
-1. Build:
+### 1. Build
 
 ```bash
-cd /Users/hieunguyen/Documents/_my-project/weatherdatadashboard
-go build -o bin/weatherd
+cd be
+go build -o ../bin/weatherd ./cmd/weatherd
 ```
 
-2. Run:
+### 2. Run
 
 ```bash
+cd ..
 ./bin/weatherd
 ```
 
-3. Example request:
+### 3. Example Request
 
 ```bash
 curl "http://localhost:8080/api/weather/current?city=London"
 ```
 
-Run tests:
+### 4. Swagger UI
+
+Visit [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
+
+---
+
+## Frontend: Quickstart
+
+### 1. Scaffold the App
 
 ```bash
-cd /Users/hieunguyen/Documents/_my-project/weatherdatadashboard
-go test ./...
+npm create vite@latest fe -- --template react-ts
+cd fe
+npm install
+```
 
-Environment configuration
-- PORT: port number to listen on (default: 8080). Example: `PORT=9090` or `PORT=:9090`.
-- CACHE_TTL: cache TTL as a Go duration string (default: 5m). Examples: `CACHE_TTL=2m`, `CACHE_TTL=300s`.
+### 2. Configure Proxy (optional, for local API calls)
 
-Example using env vars:
+In `fe/vite.config.ts`, add:
+
+```ts
+// ...existing code...
+server: {
+  proxy: {
+    '/api': 'http://localhost:8080',
+  },
+},
+```
+
+### 3. Start the Frontend
 
 ```bash
-PORT=9090 CACHE_TTL=2m ./bin/weatherd
+npm run dev
 ```
+
+### 4. Example API Call (React)
+
+```ts
+fetch('/api/weather/current?city=London')
+  .then(res => res.json())
+  .then(data => console.log(data));
 ```
+
+---
+
+## Environment Configuration
+
+- `PORT` — Port to listen on (default: 8080)
+- `CACHE_TTL` — Cache TTL (default: 300s, e.g. `2m`, `300s`)
+- Example:  
+  ```bash
+  PORT=9090 CACHE_TTL=2m ./bin/weatherd
+  ```
+
+---
+
+## Development
+
+- Backend code: `be/`
+- Run tests:
+  ```bash
+  cd be
+  go test ./...
+  ```
+- Frontend code: `fe/`
+  - Start dev server: `npm run dev`
+  - Build for production: `npm run build`
+
+---
+
+## Notes
+
+- Prometheus metrics available at `/metrics`
+- API documentation at `/swagger/index.html`
+- The backend is production-ready and modularized with clean architecture.
 # weatherdatadashboard

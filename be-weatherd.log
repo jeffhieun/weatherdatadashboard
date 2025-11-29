@@ -1,8 +1,0 @@
-2025/11/22 11:59:06 Config: port=8080 cacheTTL=5m0s geocode=https://geocoding-api.open-meteo.com weather=https://api.open-meteo.com
-Server running at http://localhost:8080
-2025/11/22 12:01:57 error fetching weather for quy nhon: city not found
-2025/11/22 12:02:09 error fetching weather for binh dinh: city not found
-2025/11/22 12:02:18 error fetching flood for binh dinh: city not found
-2025/11/22 12:02:38 error fetching weather for gia lai: city not found
-2025/11/22 12:22:20 Shutting down server...
-2025/11/22 12:22:20 Server exiting
