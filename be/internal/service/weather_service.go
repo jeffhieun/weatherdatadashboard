@@ -11,11 +11,20 @@ import (
 	"github.com/jeffhieun/weatherdatadashboard/internal/store"
 )
 
+type DefaultWeatherService struct {
+	repo     store.WeatherRepository
+	cacheTTL time.Duration
+}
+
+func NewDefaultWeatherService(repo store.WeatherRepository, cacheTTL time.Duration) *DefaultWeatherService {
+	return &DefaultWeatherService{repo: repo, cacheTTL: cacheTTL}
+}
+
 // GetWeatherDetails fetches and normalizes detailed weather data for a city.
 func (s *DefaultWeatherService) GetWeatherDetails(city string) (model.WeatherDetails, error) {
-	// Try to fetch cached record from repository (reuse existing cache infra if possible)
-	// For this example, we use a simple in-memory cache (could be improved for prod)
-	// 1. Geocode city name to lat/lon using Open-Meteo
+	if data, ok := s.repo.Get(city); ok {
+		return data, nil
+	}
 	geoURL := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json", url.QueryEscape(city))
 	resp, err := http.Get(geoURL)
 	if err != nil {
@@ -40,7 +49,6 @@ func (s *DefaultWeatherService) GetWeatherDetails(city string) (model.WeatherDet
 	lon := geo.Results[0].Longitude
 	cityName := geo.Results[0].Name
 
-	// 2. Fetch weather for lat/lon using Open-Meteo (current + daily)
 	weatherURL := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current_weather=true&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,rain,snowfall,cloudcover,uv_index,visibility,surface_pressure,windspeed_10m,winddirection_10m&daily=sunrise,sunset&timezone=auto", lat, lon)
 	respW, err := http.Get(weatherURL)
 	if err != nil {
@@ -86,7 +94,6 @@ func (s *DefaultWeatherService) GetWeatherDetails(city string) (model.WeatherDet
 		}
 	}
 
-	// Parse sunrise/sunset
 	sunrise, _ := time.Parse(time.RFC3339, wres.Daily.Sunrise[0])
 	sunset, _ := time.Parse(time.RFC3339, wres.Daily.Sunset[0])
 
@@ -97,7 +104,7 @@ func (s *DefaultWeatherService) GetWeatherDetails(city string) (model.WeatherDet
 		Humidity:    int(wres.Hourly.RelativeHumidity2m[idx]),
 		WindSpeed:   wres.CurrentWeather.WindSpeed,
 		WindDir:     fmt.Sprintf("%.0f°", wres.CurrentWeather.WindDir),
-		Visibility:  wres.Hourly.Visibility[idx] / 1000.0, // meters to km
+		Visibility:  wres.Hourly.Visibility[idx] / 1000.0,
 		Pressure:    int(wres.Hourly.SurfacePressure[idx]),
 		UVIndex:     int(wres.Hourly.UVIndex[idx]),
 		Sunrise:     sunrise,
@@ -108,111 +115,20 @@ func (s *DefaultWeatherService) GetWeatherDetails(city string) (model.WeatherDet
 		Snow:        wres.Hourly.Snowfall[idx],
 		UpdatedAt:   time.Now(),
 	}
+	s.repo.Set(city, details, s.cacheTTL)
 	return details, nil
 }
 
-// Weather represents the forecast returned by the service layer.
-type Weather struct {
-	Temperature float64   `json:"temperature"`
-	FetchedAt   time.Time `json:"fetched_at"`
+// ...existing code...
+// GetCached returns a cached value for a city if present (and not expired).
+func (s *DefaultWeatherService) GetCached(city string) (model.WeatherDetails, bool) {
+	if data, ok := s.repo.Get(city); ok {
+		return data, true
+	}
+	return model.WeatherDetails{}, false
 }
 
-// WeatherService defines business methods exposed to handlers.
-type WeatherService interface {
-	GetForecast(city string) (Weather, error)
-	// GetCached returns the cached weather for city if present (and not expired).
-	GetCached(city string) (Weather, bool)
-	// ListCached returns all cached records as a map city->Weather.
-	ListCached() map[string]Weather
-}
-
-// DefaultWeatherService is a simple implementation of WeatherService.
-type DefaultWeatherService struct {
-	repo store.WeatherRepository
-}
-
-// NewDefaultWeatherService creates a new DefaultWeatherService.
-func NewDefaultWeatherService(repo store.WeatherRepository) *DefaultWeatherService {
-	return &DefaultWeatherService{repo: repo}
-}
-
-// GetForecast returns a forecast for the requested city. This placeholder
-// implementation first checks the repository for cached data and otherwise
-// returns mock data. Replace with real API calls in production.
-func (s *DefaultWeatherService) GetForecast(city string) (Weather, error) {
-	// Try to fetch cached record from repository
-	rec, err := s.repo.FetchCachedData(city)
-	if err == nil {
-		if time.Now().Before(rec.ExpiresAt) {
-			return Weather{Temperature: rec.Temperature, FetchedAt: rec.FetchedAt}, nil
-		}
-	}
-
-	// 1. Geocode city name to lat/lon using Open-Meteo
-	geoURL := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json", url.QueryEscape(city))
-	resp, err := http.Get(geoURL)
-	if err != nil {
-		return Weather{}, fmt.Errorf("failed to geocode city: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var geo struct {
-		Results []struct {
-			Latitude  float64 `json:"latitude"`
-			Longitude float64 `json:"longitude"`
-		} `json:"results"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&geo); err != nil {
-		return Weather{}, fmt.Errorf("invalid geocoding response: %w", err)
-	}
-	if len(geo.Results) == 0 {
-		return Weather{}, fmt.Errorf("city not found")
-	}
-	lat := geo.Results[0].Latitude
-	lon := geo.Results[0].Longitude
-
-	// 2. Fetch weather for lat/lon using Open-Meteo
-	weatherURL := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current_weather=true", lat, lon)
-	respW, err := http.Get(weatherURL)
-	if err != nil {
-		return Weather{}, fmt.Errorf("failed to fetch weather: %w", err)
-	}
-	defer respW.Body.Close()
-
-	var weatherRes struct {
-		CurrentWeather struct {
-			Temperature float64 `json:"temperature"`
-		} `json:"current_weather"`
-	}
-	if err := json.NewDecoder(respW.Body).Decode(&weatherRes); err != nil {
-		return Weather{}, fmt.Errorf("invalid weather response: %w", err)
-	}
-
-	w := Weather{Temperature: weatherRes.CurrentWeather.Temperature, FetchedAt: time.Now()}
-	_ = s.repo.SaveCachedData(city, store.CacheRecord{Temperature: w.Temperature, FetchedAt: w.FetchedAt, ExpiresAt: time.Now().Add(5 * time.Minute)})
-	return w, nil
-}
-
-// GetCached returns a cached value if present (and not expired).
-func (s *DefaultWeatherService) GetCached(city string) (Weather, bool) {
-	rec, err := s.repo.FetchCachedData(city)
-	if err != nil {
-		return Weather{}, false
-	}
-	if time.Now().After(rec.ExpiresAt) {
-		return Weather{}, false
-	}
-	return Weather{Temperature: rec.Temperature, FetchedAt: rec.FetchedAt}, true
-}
-
-// ListCached returns all non-expired cached records as a map of city->Weather.
-func (s *DefaultWeatherService) ListCached() map[string]Weather {
-	out := make(map[string]Weather)
-	m := s.repo.ListCached()
-	for city, rec := range m {
-		if time.Now().Before(rec.ExpiresAt) {
-			out[city] = Weather{Temperature: rec.Temperature, FetchedAt: rec.FetchedAt}
-		}
-	}
-	return out
+// ListCached returns all cached weather details as a map of city to WeatherDetails.
+func (s *DefaultWeatherService) ListCached() map[string]model.WeatherDetails {
+	return s.repo.List()
 }

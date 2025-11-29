@@ -1,13 +1,8 @@
 package api
 
 import (
-	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,37 +10,17 @@ import (
 	"github.com/jeffhieun/weatherdatadashboard/internal/service"
 )
 
-// GetWeatherDetails godoc
-// @Summary      Get detailed weather information
-// @Description  Returns detailed weather for a city (live fetch, caches result)
-// @Tags         weather
-// @Param        city  query  string  true  "City name"
-// @Success      200  {object}  model.WeatherDetails
-// @Failure      400  {object}  map[string]string
-// @Failure      500  {object}  map[string]string
-// @Router       /api/weather/details [get]
-func (h *Handler) GetWeatherDetails(c *gin.Context) {
-	city := c.Query("city")
-	if city == "" {
-		c.JSON(400, gin.H{"error": "city is required"})
-		return
-	}
-	details, err := h.svc.(*service.DefaultWeatherService).GetWeatherDetails(city)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(200, details)
-}
+// ...existing code...
 
 // Handler holds dependencies for HTTP handlers in this package.
 type Handler struct {
-	svc service.WeatherService
+	weatherSvc *service.DefaultWeatherService
+	geocodeSvc *service.GeocodeService
 }
 
-// NewHandler constructs a new Handler with the provided service.
-func NewHandler(svc service.WeatherService) *Handler {
-	return &Handler{svc: svc}
+// NewHandler constructs a new Handler with the provided services.
+func NewHandler(weatherSvc *service.DefaultWeatherService, geocodeSvc *service.GeocodeService) *Handler {
+	return &Handler{weatherSvc: weatherSvc, geocodeSvc: geocodeSvc}
 }
 
 // GetWeatherData godoc
@@ -57,26 +32,18 @@ func NewHandler(svc service.WeatherService) *Handler {
 // @Failure      400  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
 // @Router       /api/weather/current [get]
-func (h *Handler) GetWeatherData(c *gin.Context) {
+func (h *Handler) GetWeatherDetails(c *gin.Context) {
 	city := c.Query("city")
 	if city == "" {
 		c.JSON(400, gin.H{"error": "city is required"})
 		return
 	}
-
-	// Call the service layer to get forecast (business logic).
-	forecast, err := h.svc.GetForecast(city)
+	details, err := h.weatherSvc.GetWeatherDetails(city)
 	if err != nil {
-		log.Printf("service error: %v", err)
-		c.JSON(500, gin.H{"error": "internal error"})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(200, gin.H{
-		"city":        city,
-		"temperature": forecast.Temperature,
-		"fetched_at":  forecast.FetchedAt,
-	})
+	c.JSON(200, details)
 }
 
 // GetCachedResult godoc
@@ -95,11 +62,11 @@ func (h *Handler) GetCachedResult(c *gin.Context) {
 		return
 	}
 
-	if rec, ok := h.svc.GetCached(city); ok {
+	if rec, ok := h.weatherSvc.GetCached(city); ok {
 		c.JSON(200, gin.H{
 			"city":        city,
 			"temperature": rec.Temperature,
-			"fetched_at":  rec.FetchedAt,
+			"fetched_at":  rec.UpdatedAt,
 		})
 		return
 	}
@@ -113,13 +80,13 @@ func (h *Handler) GetCachedResult(c *gin.Context) {
 // @Success      200  {array}  map[string]interface{}
 // @Router       /api/weather/results [get]
 func (h *Handler) ListCachedResults(c *gin.Context) {
-	m := h.svc.ListCached()
+	m := h.weatherSvc.ListCached()
 	out := make([]map[string]interface{}, 0, len(m))
 	for city, rec := range m {
 		out = append(out, map[string]interface{}{
 			"city":        city,
 			"temperature": rec.Temperature,
-			"fetched_at":  rec.FetchedAt,
+			"fetched_at":  rec.UpdatedAt,
 		})
 	}
 	c.JSON(200, out)
@@ -157,56 +124,11 @@ func (h *Handler) SearchCities(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "query must be at least 2 characters"})
 		return
 	}
-
-	// Check cache
-	citySearchCacheLock.RLock()
-	entry, found := citySearchCache[query]
-	citySearchCacheLock.RUnlock()
-	if found && time.Now().Before(entry.ExpiresAt) {
-		c.JSON(http.StatusOK, entry.Results)
-		return
-	}
-
-	url := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=5&language=en&format=json", url.QueryEscape(strings.TrimSpace(query)))
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	suggestions, err := h.geocodeSvc.SearchCity(query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "geocoding service unavailable"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	defer resp.Body.Close()
-
-	var geo struct {
-		Results []struct {
-			Name    string  `json:"name"`
-			Country string  `json:"country"`
-			Lat     float64 `json:"latitude"`
-			Lon     float64 `json:"longitude"`
-		} `json:"results"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&geo); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid geocoding response"})
-		return
-	}
-
-	suggestions := make([]CitySuggestion, 0, len(geo.Results))
-	for _, r := range geo.Results {
-		suggestions = append(suggestions, CitySuggestion{
-			Name:    r.Name,
-			Country: r.Country,
-			Lat:     r.Lat,
-			Lon:     r.Lon,
-		})
-	}
-
-	// Cache the result
-	citySearchCacheLock.Lock()
-	citySearchCache[query] = citySearchCacheEntry{
-		Results:   suggestions,
-		ExpiresAt: time.Now().Add(5 * time.Minute), // or use your config TTL
-	}
-	citySearchCacheLock.Unlock()
-
 	c.JSON(http.StatusOK, suggestions)
 }
 

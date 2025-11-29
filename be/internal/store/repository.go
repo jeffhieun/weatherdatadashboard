@@ -1,76 +1,59 @@
 package store
 
 import (
-	"fmt"
 	"sync"
 	"time"
+
+	"github.com/jeffhieun/weatherdatadashboard/internal/model"
 )
 
-// CacheRecord represents a cached weather value stored by the repository.
 type CacheRecord struct {
-	Temperature float64
-	FetchedAt   time.Time
-	ExpiresAt   time.Time
+	Weather   model.WeatherDetails
+	ExpiresAt time.Time
 }
 
-// WeatherRepository defines storage operations used by the service layer.
 type WeatherRepository interface {
-	FetchCachedData(city string) (CacheRecord, error)
-	// SaveCachedData persists a cache record for a city.
-	SaveCachedData(city string, rec CacheRecord) error
-	// ListCached returns all cached records (city -> record).
-	ListCached() map[string]CacheRecord
+	Get(city string) (model.WeatherDetails, bool)
+	Set(city string, data model.WeatherDetails, ttl time.Duration)
+	List() map[string]model.WeatherDetails
 	Close()
 }
 
-// PostgresRepository is a placeholder concrete implementation that would
-// connect to a Postgres database in a real application. This mock implementation
-// returns a not-found error to indicate a cache miss.
-type PostgresRepository struct {
-	// In-memory placeholder storage for cached records.
+type InMemoryRepository struct {
 	mu    sync.RWMutex
 	store map[string]CacheRecord
 }
 
-// NewPostgresRepository creates a new PostgresRepository. Replace with real
-// initialization (connection string, pooling, etc.).
-func NewPostgresRepository() *PostgresRepository {
-	return &PostgresRepository{store: make(map[string]CacheRecord)}
+func NewInMemoryRepository() *InMemoryRepository {
+	return &InMemoryRepository{store: make(map[string]CacheRecord)}
 }
 
-// FetchCachedData tries to retrieve cached data for the provided city.
-// This placeholder always returns an error to indicate no cache entry.
-func (p *PostgresRepository) FetchCachedData(city string) (CacheRecord, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	rec, ok := p.store[city]
-	if !ok {
-		return CacheRecord{}, fmt.Errorf("cache miss for city=%s", city)
+func (r *InMemoryRepository) Get(city string) (model.WeatherDetails, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	rec, ok := r.store[city]
+	if !ok || time.Now().After(rec.ExpiresAt) {
+		return model.WeatherDetails{}, false
 	}
-	return rec, nil
+	return rec.Weather, true
 }
 
-// SaveCachedData stores a cache record in memory.
-func (p *PostgresRepository) SaveCachedData(city string, rec CacheRecord) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.store[city] = rec
-	return nil
+func (r *InMemoryRepository) Set(city string, data model.WeatherDetails, ttl time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.store[city] = CacheRecord{Weather: data, ExpiresAt: time.Now().Add(ttl)}
 }
 
-// ListCached returns a copy of the in-memory cache map.
-func (p *PostgresRepository) ListCached() map[string]CacheRecord {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	out := make(map[string]CacheRecord, len(p.store))
-	for k, v := range p.store {
-		out[k] = v
+func (r *InMemoryRepository) List() map[string]model.WeatherDetails {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make(map[string]model.WeatherDetails)
+	for k, v := range r.store {
+		if time.Now().Before(v.ExpiresAt) {
+			result[k] = v.Weather
+		}
 	}
-	return out
+	return result
 }
 
-// Close releases any resources held by the repository.
-func (p *PostgresRepository) Close() {
-	// Close connections if necessary. No-op in this placeholder.
-	_ = time.Now()
-}
+func (r *InMemoryRepository) Close() {}
