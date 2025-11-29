@@ -23,12 +23,38 @@ A full-stack project for weather data visualization and city search, featuring a
 - `GET /api/weather/current?city={city}` — Get current weather for a city (live fetch, caches result)
 - `GET /api/weather/details?city={city}` — (Alias, same as above)
 - `GET /api/weather/result?city={city}` — Get cached weather result (no live fetch)
-- `GET /api/weather/results` — List all cached weather records
+- `GET /api/weather/results?day={day}&month={month}&year={year}` — List all cached weather records (optionally filter by date)
 - `GET /api/cities/search?query={name}` — City auto-suggest (min 2 chars)
-- `GET /api/flood/risk` — (If implemented) Flood risk endpoint
-- `GET /api/flood/results` — (If implemented) List flood risk results
+- `GET /api/flood/risk?latitude={lat}&longitude={lon}` — Get flood risk assessment for coordinates
+- `GET /api/flood/results` — List cached flood risk results
 - `GET /swagger/index.html` — Swagger UI (API docs)
 - `GET /metrics` — Prometheus metrics
+
+### Date Filtering
+
+The `/api/weather/results` endpoint supports optional date filtering:
+- `day` — Filter by day (1-31)
+- `month` — Filter by month (1-12)
+- `year` — Filter by year (e.g., 2025)
+
+Example: `/api/weather/results?day=29&month=11&year=2025`
+
+### Flood Risk Assessment
+
+The flood risk feature provides assessment based on geographic coordinates:
+- Returns risk level: `high`, `medium`, or `low`
+- Includes probability percentage
+- Automatically fetched when selecting a city
+- See [FLOOD_RISK_INTEGRATION.md](./FLOOD_RISK_INTEGRATION.md) for detailed documentation
+
+### Cached Weather Data
+
+The cached weather feature displays previously fetched weather data:
+- View all cached weather records with `/api/weather/results`
+- Lookup specific city cache with `/api/weather/result?city={city}`
+- Filter by date (day, month, year)
+- No live API calls - instant display from cache
+- See [CACHED_WEATHER_INTEGRATION.md](./CACHED_WEATHER_INTEGRATION.md) for detailed documentation
 
 ---
 
@@ -96,6 +122,24 @@ fetch('/api/weather/current?city=London')
   .then(res => res.json())
   .then(data => console.log(data));
 ```
+
+### 5. Use the Date Filter Component
+
+Import and use the `WeatherDateFilter` component:
+
+```tsx
+import WeatherDateFilter from './components/WeatherDateFilter';
+
+function App() {
+  return (
+    <div>
+      <WeatherDateFilter />
+    </div>
+  );
+}
+```
+
+This component provides a calendar date picker to filter weather results by day, month, and year.
 
 ---
 

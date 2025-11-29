@@ -82,12 +82,44 @@ func (h *Handler) GetCachedResult(c *gin.Context) {
 func (h *Handler) ListCachedResults(c *gin.Context) {
 	m := h.weatherSvc.ListCached()
 	out := make([]map[string]interface{}, 0, len(m))
+
+	// Parse optional filters
+	dayStr := c.Query("day")
+	monthStr := c.Query("month")
+	yearStr := c.Query("year")
+	var day, month, year int
+	var err error
+	if dayStr != "" {
+		day, err = strconv.Atoi(dayStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid day"})
+			return
+		}
+	}
+	if monthStr != "" {
+		month, err = strconv.Atoi(monthStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid month"})
+			return
+		}
+	}
+	if yearStr != "" {
+		year, err = strconv.Atoi(yearStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid year"})
+			return
+		}
+	}
+
 	for city, rec := range m {
-		out = append(out, map[string]interface{}{
-			"city":        city,
-			"temperature": rec.Temperature,
-			"fetched_at":  rec.UpdatedAt,
-		})
+		t := rec.UpdatedAt
+		if (day == 0 || t.Day() == day) && (month == 0 || int(t.Month()) == month) && (year == 0 || t.Year() == year) {
+			out = append(out, map[string]interface{}{
+				"city":        city,
+				"temperature": rec.Temperature,
+				"fetched_at":  rec.UpdatedAt,
+			})
+		}
 	}
 	c.JSON(200, out)
 }

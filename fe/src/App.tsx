@@ -4,6 +4,11 @@ import { fetchWeatherDetails, WeatherDetails } from './api/weather';
 import { WeatherDetail } from './components/WeatherDetail';
 import Skeleton from './Skeleton'
 import { CityAutoSuggest, CitySuggestion } from "./CityAutoSuggest";
+import WeatherDateFilter from "./components/WeatherDateFilter";
+import CurrentWeather from "./components/CurrentWeather";
+import { FloodResultsList } from "./components/FloodResultsList";
+import { CachedWeatherResults } from "./components/CachedWeatherResults";
+import { CachedWeatherLookup } from "./components/CachedWeatherLookup";
 import axios from "axios";
 import "./styles.css";
 import { FaCloudSun, FaWater } from "react-icons/fa";
@@ -181,137 +186,65 @@ export default function App() {
   };
 
   return (
-    <div className="app" style={{ minHeight: "100vh" }}>
-      <div className="container">
-        <div className="hero card">
-          <div>
-            <h1>Weather Data Dashboard</h1>
-            <p>Enter a city to fetch current weather. Cached results appear on the right.</p>
-          </div>
-          <div style={{ marginLeft: 'auto' }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div className="unit-toggle">
-                <button className={unit === 'C' ? 'active' : ''} onClick={() => setUnit('C')}>°C</button>
-                <button className={unit === 'F' ? 'active' : ''} onClick={() => setUnit('F')}>°F</button>
-              </div>
-              {loading ? <div className="spinner" /> : null}
-            </div>
-          </div>
+    <div className="app" style={{ 
+      minHeight: "100vh", 
+      background: "linear-gradient(to bottom, #ffffff 0%, #f5f5f7 100%)"
+    }}>
+      <div className="container" style={{ paddingTop: "40px", paddingBottom: "40px" }}>
+        <div style={{ 
+          marginBottom: "32px",
+          textAlign: "center"
+        }}>
+          <h1 style={{
+            fontSize: "48px",
+            fontWeight: "600",
+            color: "#000000",
+            margin: "0 0 12px 0",
+            letterSpacing: "-0.03em",
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          }}>
+            Weather Data Dashboard
+          </h1>
+          <p style={{
+            fontSize: "21px",
+            color: "#6e6e73",
+            margin: 0,
+            fontWeight: "400",
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          }}>
+            Real-time weather information and historical data filtering
+          </p>
         </div>
 
-        <div className="grid">
-          <div>
-            <div className="card">
-              <h2>Get current weather</h2>
-              <div className="controls">
-                <CityAutoSuggest onSelect={handleSelectCity} />
-                <button className="secondary" onClick={loadResults}>Cache</button>
-              </div>
-
-              {error && (
-                <div className="error">Error: {error}</div>
-              )}
-
-              {loading && !data ? (
-                <div style={{ marginTop: 12 }}>
-                  <h3>Result</h3>
-                  <Skeleton lines={4} height={14} />
-                </div>
-              ) : data ? (
-                <div style={{ marginTop: 12 }}>
-                  <h3>Result</h3>
-                  <div className="weather-card animated-fade-in">
-                    <div className="weather-card-top">
-                      <span className="weather-city"><FaCloudSun style={{marginRight:8, color:'#7ee8fa'}} />{data.city}</span>
-                      <span className="weather-temp">
-                        {formatTempValue(data.temperature)}
-                      </span>
-                    </div>
-                    <div className="weather-meta">
-                      <span>Fetched: {formatFetched(data.fetched_at)}</span>
-                      <span className="weather-cached">{data.cached ? "Cached" : "Live"}</span>
-                    </div>
-                    {data.summary ? <div className="result-summary">{data.summary}</div> : null}
-                  </div>
-                  {/* Weather details card */}
-                  <div style={{ marginTop: 12 }}>
-                    <h3>Weather details</h3>
-                    {loadingDetails && <Skeleton lines={6} height={16} />}
-                    {detailsError && <div className="error">{detailsError}</div>}
-                    {weatherDetails && <WeatherDetail data={weatherDetails} />}
-                  </div>
-                  {/* Flood risk card */}
-                  <div style={{ marginTop: 12 }}>
-                    <h3>Flood risk</h3>
-                    {loadingFlood && <div className="spinner" style={{ margin: "18px 0" }} />}
-                    {floodError && <p className="error">{floodError}</p>}
-                    {flood && (
-                      <div className="flood-card animated-slide-in">
-                        <div className="flood-card-top">
-                          <span className="flood-risk-label"><FaWater style={{marginRight:8, color:'#ffb347'}} />Flood Risk:</span>
-                          <span className="flood-risk-value">{flood.flood_risk}</span>
-                        </div>
-                        <div className="flood-meta">
-                          <span>Probability: {(flood.probability * 100).toFixed(0)}%</span>
-                          <span>Coords: {flood.coords.lat}, {flood.coords.lon}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <aside>
-            <div className="card cached">
-              <h2>Cached results</h2>
-              {loadingResults ? (
-                <Skeleton lines={4} height={16} />
-              ) : results.length === 0 ? (
-                <div className="muted">No cached results yet.</div>
-              ) : (
-                <ul>
-                  {results.map((r: any) => (
-                    <li key={r.city}>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <strong onClick={() => loadCityResult(r.city)} style={{ cursor: 'pointer' }}>{r.city}</strong>
-                          <small style={{ color: 'var(--muted)' }}>{formatFetched(r.fetched_at)}</small>
-                        </div>
-                        <div style={{ color: 'var(--muted)' }}>{formatTempValue(r.temperature)}</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="card cached" style={{ marginTop: 12 }}>
-              <h2>Cached flood</h2>
-              {loadingFloodResults ? (
-                <Skeleton lines={4} height={16} />
-              ) : floodResults.length === 0 ? (
-                <div className="muted">No cached flood results yet.</div>
-              ) : (
-                <ul>
-                  {floodResults.map((r: any) => (
-                    <li key={r.city}>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <strong onClick={() => loadCityFloodResult(r.city)} style={{ cursor: 'pointer' }}>{r.city}</strong>
-                          <small style={{ color: 'var(--muted)' }}>{formatFetched(r.fetched_at)}</small>
-                        </div>
-                        <div style={{ color: 'var(--muted)', textTransform: 'capitalize' }}>{r.risk}</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </aside>
+        {/* Date Filter Component */}
+        <div style={{ marginBottom: "40px" }}>
+          <WeatherDateFilter />
         </div>
 
-        <div className="footer">Frontend proxy expects backend at http://localhost:8080</div>
+        {/* Cached Weather Lookup */}
+        <div style={{ marginBottom: "40px" }}>
+          <CachedWeatherLookup />
+        </div>
+
+        {/* Cached Weather Results */}
+        <div style={{ marginBottom: "40px" }}>
+          <CachedWeatherResults />
+        </div>
+
+        {/* Flood Results List */}
+        <div style={{ marginBottom: "40px" }}>
+          <FloodResultsList />
+        </div>
+
+        <div style={{
+          textAlign: "center",
+          padding: "20px",
+          color: "#86868b",
+          fontSize: "13px",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        }}>
+          Frontend proxy expects backend at http://localhost:8080
+        </div>
       </div>
     </div>
   )
