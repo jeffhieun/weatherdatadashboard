@@ -209,11 +209,37 @@ const docTemplate = `{
         },
         "/api/weather/results": {
             "get": {
-                "description": "Returns all cached weather records (city, temperature, fetched_at)",
+                "description": "Returns cached weather records (city, temperature, fetched_at) with optional filters",
                 "tags": [
                     "weather"
                 ],
-                "summary": "List all cached weather results",
+                "summary": "List cached weather results",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "City name",
+                        "name": "city",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Day of month",
+                        "name": "day",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Month (1-12)",
+                        "name": "month",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Year (e.g., 2025)",
+                        "name": "year",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",

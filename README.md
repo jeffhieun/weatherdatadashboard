@@ -23,7 +23,7 @@ A full-stack project for weather data visualization and city search, featuring a
 - `GET /api/weather/current?city={city}` — Get current weather for a city (live fetch, caches result)
 - `GET /api/weather/details?city={city}` — (Alias, same as above)
 - `GET /api/weather/result?city={city}` — Get cached weather result (no live fetch)
-- `GET /api/weather/results?day={day}&month={month}&year={year}` — List all cached weather records (optionally filter by date)
+- `GET /api/weather/results?city={city}&day={day}&month={month}&year={year}` — List historical weather snapshots (optionally filter by city and/or date). A snapshot is recorded every time you fetch current weather or read from cache.
 - `GET /api/cities/search?query={name}` — City auto-suggest (min 2 chars)
 - `GET /api/flood/risk?latitude={lat}&longitude={lon}` — Get flood risk assessment for coordinates
 - `GET /api/flood/results` — List cached flood risk results
@@ -32,12 +32,15 @@ A full-stack project for weather data visualization and city search, featuring a
 
 ### Date Filtering
 
-The `/api/weather/results` endpoint supports optional date filtering:
+The `/api/weather/results` endpoint supports optional filtering across historical snapshots and will return entries for the recorded `UpdatedAt` timestamps:
 - `day` — Filter by day (1-31)
 - `month` — Filter by month (1-12)
 - `year` — Filter by year (e.g., 2025)
 
-Example: `/api/weather/results?day=29&month=11&year=2025`
+Examples:
+- `/api/weather/results?day=29&month=11&year=2025`
+- `/api/weather/results?city=Hanoi&year=2025`
+- Tip: Select a date for which you've previously fetched current weather to see stored snapshots. If you pick a date without any snapshots, the list will be empty.
 
 ### Flood Risk Assessment
 

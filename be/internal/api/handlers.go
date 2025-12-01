@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,16 +75,21 @@ func (h *Handler) GetCachedResult(c *gin.Context) {
 }
 
 // ListCachedResults godoc
-// @Summary      List all cached weather results
-// @Description  Returns all cached weather records (city, temperature, fetched_at)
+// @Summary      List cached weather results
+// @Description  Returns cached weather records (city, temperature, fetched_at) with optional filters
 // @Tags         weather
+// @Param        city   query  string  false  "City name"
+// @Param        day    query  int     false  "Day of month"
+// @Param        month  query  int     false  "Month (1-12)"
+// @Param        year   query  int     false  "Year (e.g., 2025)"
 // @Success      200  {array}  map[string]interface{}
 // @Router       /api/weather/results [get]
 func (h *Handler) ListCachedResults(c *gin.Context) {
-	m := h.weatherSvc.ListCached()
-	out := make([]map[string]interface{}, 0, len(m))
+	history := h.weatherSvc.ListAllHistory()
+	out := make([]map[string]interface{}, 0)
 
 	// Parse optional filters
+	cityFilter := c.Query("city")
 	dayStr := c.Query("day")
 	monthStr := c.Query("month")
 	yearStr := c.Query("year")
@@ -111,14 +117,21 @@ func (h *Handler) ListCachedResults(c *gin.Context) {
 		}
 	}
 
-	for city, rec := range m {
-		t := rec.UpdatedAt
-		if (day == 0 || t.Day() == day) && (month == 0 || int(t.Month()) == month) && (year == 0 || t.Year() == year) {
-			out = append(out, map[string]interface{}{
-				"city":        city,
-				"temperature": rec.Temperature,
-				"fetched_at":  rec.UpdatedAt,
-			})
+	for cityKey, list := range history {
+		for _, rec := range list {
+			// If a city filter is provided, skip non-matching entries (case-insensitive match)
+			if cityFilter != "" && strings.ToLower(rec.City) != strings.ToLower(cityFilter) {
+				continue
+			}
+			t := rec.UpdatedAt
+			if (day == 0 || t.Day() == day) && (month == 0 || int(t.Month()) == month) && (year == 0 || t.Year() == year) {
+				out = append(out, map[string]interface{}{
+					"city":        rec.City,
+					"temperature": rec.Temperature,
+					"fetched_at":  rec.UpdatedAt,
+					"_key":        cityKey,
+				})
+			}
 		}
 	}
 	c.JSON(200, out)

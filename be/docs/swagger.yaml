@@ -144,7 +144,25 @@ paths:
       - weather
   /api/weather/results:
     get:
-      description: Returns all cached weather records (city, temperature, fetched_at)
+      description: Returns cached weather records (city, temperature, fetched_at)
+        with optional filters
+      parameters:
+      - description: City name
+        in: query
+        name: city
+        type: string
+      - description: Day of month
+        in: query
+        name: day
+        type: integer
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year (e.g., 2025)
+        in: query
+        name: year
+        type: integer
       responses:
         "200":
           description: OK
@@ -153,7 +171,7 @@ paths:
               additionalProperties: true
               type: object
             type: array
-      summary: List all cached weather results
+      summary: List cached weather results
       tags:
       - weather
 swagger: "2.0"

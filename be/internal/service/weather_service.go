@@ -23,6 +23,10 @@ func NewDefaultWeatherService(repo store.WeatherRepository, cacheTTL time.Durati
 // GetWeatherDetails fetches and normalizes detailed weather data for a city.
 func (s *DefaultWeatherService) GetWeatherDetails(city string) (model.WeatherDetails, error) {
 	if data, ok := s.repo.Get(city); ok {
+		// Append a historical snapshot with refreshed timestamp to track views over time
+		snap := data
+		snap.UpdatedAt = time.Now()
+		s.repo.AppendHistory(snap.City, snap)
 		return data, nil
 	}
 	geoURL := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json", url.QueryEscape(city))
@@ -116,6 +120,8 @@ func (s *DefaultWeatherService) GetWeatherDetails(city string) (model.WeatherDet
 		UpdatedAt:   time.Now(),
 	}
 	s.repo.Set(city, details, s.cacheTTL)
+	// Also record in history under canonical city name
+	s.repo.AppendHistory(details.City, details)
 	return details, nil
 }
 
@@ -131,4 +137,14 @@ func (s *DefaultWeatherService) GetCached(city string) (model.WeatherDetails, bo
 // ListCached returns all cached weather details as a map of city to WeatherDetails.
 func (s *DefaultWeatherService) ListCached() map[string]model.WeatherDetails {
 	return s.repo.List()
+}
+
+// ListHistory returns all historical snapshots for a specific city.
+func (s *DefaultWeatherService) ListHistory(city string) []model.WeatherDetails {
+	return s.repo.ListHistory(city)
+}
+
+// ListAllHistory returns historical snapshots grouped by city.
+func (s *DefaultWeatherService) ListAllHistory() map[string][]model.WeatherDetails {
+	return s.repo.ListAllHistory()
 }
